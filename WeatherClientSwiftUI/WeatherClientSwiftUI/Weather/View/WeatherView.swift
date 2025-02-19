@@ -43,22 +43,44 @@ struct WeatherView: View {
                 if segmentValue == 0 {
                     print(viewModel.city)
                     Task {
-                        await viewModel.networkService.fetchWeather(byCyti: viewModel.city) { result in
-                            viewModel.updateUI(with: result)
-                        }
+                        await viewModel.fetchWeatherCity()
                         
                     }
                 } else {
                     print("Lat: \(viewModel.latitude), lon: \(viewModel.longitude)")
                     Task {
-                        await viewModel.networkService.fetchWeather(byLatitude: viewModel.latitude, byLongitude: viewModel.longitude) { result in
-                            viewModel.updateUI(with: result)
-                        }
+                        await viewModel.fetchWeatherCoordinate()
                         
                     }
                     
                 }
             }
+            .frame(width: 100)
+            .buttonStyle(.automatic)
+            .foregroundColor(.white)
+            .padding()
+            .background(Color.blue)
+            .cornerRadius(10)
+            
+            Button("Save") {
+                Task {
+                    viewModel.save()
+                }
+            }
+            .frame(width: 100)
+            .buttonStyle(.automatic)
+            .foregroundColor(.white)
+            .padding()
+            .background(Color.blue)
+            .cornerRadius(10)
+            
+            
+            Button("Load") {
+                Task {
+                    viewModel.load()
+                }
+            }
+            .frame(width: 100)
             .buttonStyle(.automatic)
             .foregroundColor(.white)
             .padding()

@@ -8,6 +8,8 @@
 
 import Foundation
 
+
+
 struct WeatherResult: Codable {
     
     let coord: CityCoordainates

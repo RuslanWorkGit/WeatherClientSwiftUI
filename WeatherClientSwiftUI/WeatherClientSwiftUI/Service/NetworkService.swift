@@ -11,82 +11,46 @@ class NetworkService {
     
     static let shared = NetworkService()
     
-    func fetchWeather(byCyti city: String, completion: @escaping (WeatherResult) -> Void) async {
+    func fetchWeather(byCyti city: String) async throws -> WeatherResult {
         let linkApi = ConstantLink.mainLink.rawValue + ConstantLink.city.rawValue + "\(city)" + "&" + ConstantLink.appid.rawValue + "&" + ConstantLink.metrics.rawValue
        
         
         guard let url = URL(string: linkApi) else {
             assertionFailure("Wrong link Api \(linkApi)")
-            return
+            throw URLError(.badURL)
         }
         
         var requestUrl = URLRequest(url: url)
         requestUrl.httpMethod = "GET"
         
-        let task = URLSession.shared.dataTask(with: requestUrl) { data, response, error in
-            if let responseError = error {
-                assertionFailure("\(responseError)")
-            }
-            
-            guard let responseData = data else {
-                assertionFailure("Problem with data")
-                return
-            }
-            
-            do {
-                let decodeData = try JSONDecoder().decode(WeatherResult.self, from: responseData)
-                
-                DispatchQueue.main.async {
-                    completion(decodeData)
-                    //self.updateUI(with: decodeData)
-                }
-                
-            } catch(let parseError){
-                print(parseError)
-            }
+        let (data, response) = try await URLSession.shared.data(for: requestUrl)
+        
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+            throw URLError(.badServerResponse)
         }
-        task.resume()
-  
-        print("Fetching weather for city: \(city)")
+        
+        return try JSONDecoder().decode(WeatherResult.self, from: data)
     }
     
-    func fetchWeather(byLatitude latitude: String, byLongitude longitude: String, completion: @escaping (WeatherResult) -> Void) async {
+    func fetchWeather(byLatitude latitude: String, byLongitude longitude: String) async throws -> WeatherResult{
         
         let linkApi = ConstantLink.mainLink.rawValue + ConstantLink.latitude.rawValue + "\(latitude)" + "&" + ConstantLink.longitude.rawValue + "\(longitude)" + "&" + ConstantLink.appid.rawValue + "&" + ConstantLink.metrics.rawValue
         
         guard let url = URL(string: linkApi) else {
             assertionFailure("Wring url link: \(linkApi)")
-            return
+            throw URLError(.badURL)
         }
         
         var requestUrl = URLRequest(url: url)
         requestUrl.httpMethod = "GET"
         
-        let task = URLSession.shared.dataTask(with: requestUrl) { data, response, error in
-            if let responseError = error {
-                assertionFailure("\(responseError)")
-            }
-            
-            guard let responseData = data else {
-                assertionFailure("No data")
-                return
-            }
-            
-            do {
-                let decodeData = try JSONDecoder().decode(WeatherResult.self, from: responseData)
-                print(decodeData)
-                
-                DispatchQueue.main.async {
-                    completion(decodeData)
-                    //self.updateUI(with: decodeData)
-                }
-                
-            } catch(let parseError) {
-                print(parseError)
-            }
-        }
-        task.resume()
+        let (data, response) = try await URLSession.shared.data(for: requestUrl)
         
-        print("Fetching weather for latitude: \(latitude), longitude: \(longitude)")
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+        
+        return try JSONDecoder().decode(WeatherResult.self, from: data)
+        
     }
 }
