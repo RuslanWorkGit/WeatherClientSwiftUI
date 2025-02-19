@@ -20,6 +20,8 @@ struct WeatherInfoView: View {
     var body: some View {
        
         VStack(spacing: 15) {
+            Text("City: \(viewModel.cityName)")
+            
             Text("Tempereture: \(viewModel.temperature)")
             
             Text("Humidity: \(viewModel.humidity)")
