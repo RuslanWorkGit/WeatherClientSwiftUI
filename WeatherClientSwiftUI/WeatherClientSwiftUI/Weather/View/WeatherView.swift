@@ -77,7 +77,7 @@ struct WeatherView: View {
             
             Button("Load") {
                 Task {
-                    viewModel.load()
+                    await viewModel.load()
                 }
             }
             .frame(width: 100)
@@ -95,8 +95,14 @@ struct WeatherView: View {
             
         }
         .padding()
+        .onAppear(){
+            Task {
+                await viewModel.load()
+            }
+        }
         
     }
+        
 }
 
 #Preview {

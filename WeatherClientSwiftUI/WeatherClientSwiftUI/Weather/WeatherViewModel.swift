@@ -16,16 +16,18 @@ class WeatherViewModel: ObservableObject {
     @Published var humidity: String = "0.0"
     @Published var description: String = "Loading..."
     @Published var wind: String = "none"
+    @Published var timeUpdate: String = ""
     
     @Published var city: String = ""
     @Published var latitude: String = ""
     @Published var longitude: String = ""
     
-    @Published var currentWeather: WeatherResult?
+    @Published var currentWeather: StoredWeather?
     
     private let networkService: NetworkService
     private let fileService: FileServiceProtocol
     private let fileName: String = "weather.json"
+    private let updateTime: TimeInterval = 3 * 60 * 60
     
     
     init(fileService: FileServiceProtocol = FileService(), networkService: NetworkService = .shared) {
@@ -41,7 +43,7 @@ class WeatherViewModel: ObservableObject {
             let weather = try await networkService.fetchWeather(byCyti: city)
             print("Fetching wether for city: \(city)")
             updateUI(with: weather)
-            currentWeather = weather
+            currentWeather = StoredWeather(weather: weather, time: Date().timeIntervalSince1970)
         } catch {
             print("Error fetching weather: \(error)")
         }
@@ -55,7 +57,7 @@ class WeatherViewModel: ObservableObject {
             let weather = try await networkService.fetchWeather(byLatitude: latitude, byLongitude: longitude)
             print("Fetching weather for coord: lat = \(latitude), lon = \(longitude)")
             updateUI(with: weather)
-            currentWeather = weather
+            currentWeather = StoredWeather(weather: weather, time: Date().timeIntervalSince1970)
         } catch {
             print("Error fethcin weather: \(error)")
         }
@@ -68,6 +70,7 @@ class WeatherViewModel: ObservableObject {
         humidity = "\(weather.main.humidity)"
         description = weather.weather.first?.description.capitalized ?? "N/A"
         wind = windDirection(deg: weather.wind.deg)
+
     }
     
     func save() {
@@ -78,20 +81,41 @@ class WeatherViewModel: ObservableObject {
         
         do {
             try fileService.saveData(object: weather, fileName: fileName)
+            timeUpdate = "Last update: \(formateDate(timeInterval: Date().timeIntervalSince1970))"
             print("Data saved")
         } catch {
             print("Error save data")
         }
     }
     
-    func load() {
+    func load() async {
         do {
-            let saveWeather = try fileService.loadData(type: WeatherResult.self, fileName: fileName)
-            updateUI(with: saveWeather)
-            print("UI update with saved weather")
+            let saveWeather = try fileService.loadData(type: StoredWeather.self, fileName: fileName)
+            updateUI(with: saveWeather.weather)
+            timeUpdate = "Last update: \(formateDate(timeInterval: saveWeather.time))"
+    
+            let currentTime = Date().timeIntervalSince1970
+            let timeDifference = currentTime - saveWeather.time
+            
+            if timeDifference > updateTime {
+                print("Data need to update")
+                
+                let updateWeather = try await networkService.fetchWeather(byCyti: saveWeather.weather.name)
+                currentWeather = StoredWeather(weather: updateWeather, time: Date().timeIntervalSince1970)
+                save()
+            } else {
+                print("Data no need to update")
+            }
         } catch {
             print("Error load data")
         }
+    }
+    
+    private func formateDate(timeInterval: TimeInterval) -> String{
+        let date = Date(timeIntervalSince1970: timeInterval)
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return formatter.string(from: date)
     }
     
     private func windDirection(deg: Int) -> String {

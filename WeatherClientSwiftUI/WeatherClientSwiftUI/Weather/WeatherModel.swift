@@ -8,7 +8,10 @@
 
 import Foundation
 
-
+struct StoredWeather: Codable {
+    let weather: WeatherResult
+    let time: TimeInterval
+}
 
 struct WeatherResult: Codable {
     

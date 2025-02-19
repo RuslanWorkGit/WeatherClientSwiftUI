@@ -32,6 +32,8 @@ struct WeatherInfoView: View {
             
             Text("Wind: \(viewModel.wind)")
             
+            Text("\(viewModel.timeUpdate)")
+            
             
         }
   
