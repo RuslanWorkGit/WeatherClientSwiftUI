@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SwiftData
 
 @MainActor
 class WeatherViewModel: ObservableObject {
@@ -22,17 +23,19 @@ class WeatherViewModel: ObservableObject {
     @Published var latitude: String = ""
     @Published var longitude: String = ""
     
-    @Published var currentWeather: StoredWeather?
+//    @Published var currentWeather: StoredWeather?
+    @Published var weatherResult: WeatherResult?
     
     private let networkService: NetworkService
     private let fileService: FileServiceProtocol
     private let fileName: String = "weather.json"
-    private let updateTime: TimeInterval = 3 * 60 * 60
+    private let updateTime: TimeInterval = 10
     
-    
+
     init(fileService: FileServiceProtocol = FileService(), networkService: NetworkService = .shared) {
         self.fileService = fileService
         self.networkService = networkService
+
     }
     
     
@@ -42,8 +45,11 @@ class WeatherViewModel: ObservableObject {
         do {
             let weather = try await networkService.fetchWeather(byCyti: city)
             print("Fetching wether for city: \(city)")
-            updateUI(with: weather)
-            currentWeather = StoredWeather(weather: weather, time: Date().timeIntervalSince1970)
+            updateUI(with: weather, time: Date())
+            weatherResult = weather
+            //currentWeather = StoredWeather(weather: weather, time: Date().timeIntervalSince1970)
+
+            
         } catch {
             print("Error fetching weather: \(error)")
         }
@@ -56,59 +62,95 @@ class WeatherViewModel: ObservableObject {
         do {
             let weather = try await networkService.fetchWeather(byLatitude: latitude, byLongitude: longitude)
             print("Fetching weather for coord: lat = \(latitude), lon = \(longitude)")
-            updateUI(with: weather)
-            currentWeather = StoredWeather(weather: weather, time: Date().timeIntervalSince1970)
+            updateUI(with: weather, time: Date())
+            weatherResult = weather
+           // currentWeather = StoredWeather(weather: weather, time: Date().timeIntervalSince1970)
         } catch {
             print("Error fethcin weather: \(error)")
         }
     }
     
-    func updateUI(with weather: WeatherResult) {
+    func updateUI(with weather: WeatherResult, time: Date? = nil) {
         cityName = "\(weather.name)"
         temperature = "\(weather.main.temp) C"
         pressure = "\(weather.main.pressure)"
         humidity = "\(weather.main.humidity)"
         description = weather.weather.first?.description.capitalized ?? "N/A"
         wind = windDirection(deg: weather.wind.deg)
+        
+        if let updateTime = time {
+            timeUpdate = "Last updte: \(formateDate(timeInterval: updateTime.timeIntervalSince1970))"
+        }
 
     }
     
-    func save() {
-        guard let weather = currentWeather else {
-            print("No weather data to save")
+    func saveToSwiftData(context: ModelContext) async {
+        guard let weather = weatherResult else {
+            print("No data with weather")
             return
         }
         
+        let newWeather = SwiftDataSave(id: weather.id, name: weather.name, date: Date(), weatherDescription: weather.weather[0].description, humidity: weather.main.humidity, preassure: weather.main.pressure, temp: weather.main.temp, windDeg: weather.wind.deg, lat: weather.coord.lat, lon: weather.coord.lon)
+        
+        context.insert(newWeather)
+        
         do {
-            try fileService.saveData(object: weather, fileName: fileName)
-            timeUpdate = "Last update: \(formateDate(timeInterval: Date().timeIntervalSince1970))"
-            print("Data saved")
+            try context.save()
+            print("Weather succesfully saved to SwiftData")
         } catch {
-            print("Error save data")
+            print("Error to save!!")
         }
     }
     
-    func load() async {
-        do {
-            let saveWeather = try fileService.loadData(type: StoredWeather.self, fileName: fileName)
-            updateUI(with: saveWeather.weather)
-            timeUpdate = "Last update: \(formateDate(timeInterval: saveWeather.time))"
+    func inserWeatherData(with saveWeather: SwiftDataSave) -> WeatherResult {
+        let result = WeatherResult(coord: WeatherResult.CityCoordainates.init(lon: saveWeather.lon, lat: saveWeather.lon),
+                                   weather: [WeatherResult.WeatherInfo.init(id: 0, main: "", description: saveWeather.weatherDescription, icon: "")],
+                                   base: "",
+                                   main: WeatherResult.Main.init(temp: saveWeather.temp, feelsLike: 0, tempMin: 0, tempMax: 0, pressure: saveWeather.preassure, humidity: saveWeather.humidity, seaLevel: 0, grndLevel: 0),
+                                   visibility: 0,
+                                   wind: WeatherResult.WindInfo.init(speed: 0, deg: saveWeather.windDeg, gust: 0),
+                                   clouds: WeatherResult.CloudsInfo.init(all: 0),
+                                   dt: 0,
+                                   sys: WeatherResult.SysInfo.init(country: "", sunrise: 0, sunset: 0),
+                                   timezone: 0,
+                                   id: saveWeather.id,
+                                   name: saveWeather.name,
+                                   cod: 0)
+        return result
+    }
     
-            let currentTime = Date().timeIntervalSince1970
-            let timeDifference = currentTime - saveWeather.time
+    @MainActor
+    func loadFromSwiftData(context: ModelContext) async {
+        do {
+            let descriptor = FetchDescriptor<SwiftDataSave>(sortBy: [SortDescriptor(\.date, order: .reverse)])
+            let savedWeather = try context.fetch(descriptor)
             
-            if timeDifference > updateTime {
-                print("Data need to update")
+            if let lastWeather = savedWeather.first {
+                let weatherResult = inserWeatherData(with: lastWeather)
                 
-                let updateWeather = try await networkService.fetchWeather(byCyti: saveWeather.weather.name)
-                currentWeather = StoredWeather(weather: updateWeather, time: Date().timeIntervalSince1970)
-                save()
-            } else {
-                print("Data no need to update")
+                print("Data load from SwiftData")
+                
+                let currentTime = Date().timeIntervalSince1970
+                let timeDifference = currentTime - lastWeather.date.timeIntervalSince1970
+                
+                if timeDifference > updateTime {
+                    
+                    print("Data need to be update")
+                    let updateWeather = try await networkService.fetchWeather(byCyti: weatherResult.name)
+                    updateUI(with: updateWeather, time: Date())
+                    //currentWeather = StoredWeather(weather: updateWeather, time: Date().timeIntervalSince1970)
+                    await saveToSwiftData(context: context)
+                    
+                    
+                } else {
+                    updateUI(with: weatherResult, time: lastWeather.date)
+                    print("Data does not need to update")
+                }
             }
         } catch {
-            print("Error load data")
+            print("Error load from swift data: \(error.localizedDescription)")
         }
+        
     }
     
     private func formateDate(timeInterval: TimeInterval) -> String{
@@ -143,3 +185,4 @@ class WeatherViewModel: ObservableObject {
     }
     
 }
+

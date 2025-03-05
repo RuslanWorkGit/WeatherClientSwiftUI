@@ -6,12 +6,17 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct WeatherView: View {
     
+
     @StateObject private var viewModel = WeatherViewModel()
     @State private var segmentValue = 0
+    @Environment(\.modelContext) private var modelContext
+    @Query private var savedWeatherItems: [SwiftDataSave]
     
+
     var body: some View {
         
         VStack {
@@ -64,7 +69,7 @@ struct WeatherView: View {
             
             Button("Save") {
                 Task {
-                    viewModel.save()
+                    await viewModel.saveToSwiftData(context: modelContext)
                 }
             }
             .frame(width: 100)
@@ -77,7 +82,7 @@ struct WeatherView: View {
             
             Button("Load") {
                 Task {
-                    await viewModel.load()
+                    await viewModel.loadFromSwiftData(context: modelContext)
                 }
             }
             .frame(width: 100)
@@ -97,14 +102,19 @@ struct WeatherView: View {
         .padding()
         .onAppear(){
             Task {
-                await viewModel.load()
+                //await viewModel.load()
             }
         }
+        .modelContainer(for: SwiftDataSave.self)
         
     }
         
+        
 }
+
 
 #Preview {
     WeatherView()
 }
+
+
